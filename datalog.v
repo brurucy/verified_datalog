@@ -58,52 +58,92 @@ Fixpoint eqb_term_list (l1 l2 : list tm) : bool :=
   end.
 
 Definition eqb_atom (latom : atom) (ratom : atom) : bool :=
-  match latom, ratom with
-  | atom_ground _ _, atom_regular _ _ => false
-  | atom_regular _ _, atom_ground _ _ => false                                        
+  match latom, ratom with                                       
   | atom_ground sym l1, atom_ground sym' l2 => if eqb_string sym sym' then eqb_term_list l1 l2 else false
-  | atom_regular sym l1, atom_regular sym' l2 => if eqb_string sym sym' then eqb_term_list l1 l2 else false                                                                                                    
+  | atom_regular sym l1, atom_regular sym' l2 => if eqb_string sym sym' then eqb_term_list l1 l2 else false
+  | _, _ => false                              
   end.
 
-(* A substitution is a mapping from a regular atom to a ground atom*)
-Definition substitution := partial_map string.
+(* A substitution is a mapping from a regular atom to a ground atom *)
+(* I could have used a map, but maps don't have an easy way to recurisvely traverse them, so it is of no use. *)
+Definition substitution := list (tm * tm).
 
-Definition testmap := ("X" |-> "Albert"%string ; "Y" |-> "Alabart"%string).
-
-Definition hasKey (m : partial_map string)
-           (x : string) :=
-  match (m x) with
-  | Some _ => true
-  | None => false
-  end.           
-
-Definition hasKeyValue (m : partial_map string)
-           (x v : string) :=
-  match (m x) with
-  | Some v' => eqb_string v v'
-  | None => false
+Fixpoint hasKey (s : substitution) (t1 : tm) : bool :=
+  match s with
+  | nil => false
+  | (t, _) :: l => if eqb_term t t1 then true else hasKey l t
   end.
 
-Compute hasKey testmap "X".
-Compute hasKeyValue testmap "X" "Albert".
-Compute ("Z" |-> "Einstein"%string ; testmap).
+Fixpoint hasValue (s : substitution) (t1 : tm) : bool :=
+  match s with
+  | nil => false
+  | (_, t') :: l => if eqb_term t' t1 then true else hasValue l t'
+  end.
 
-Fixpoint ground_terms (l1 l2 : list tm)(s : substitution) : option substitution :=
+Fixpoint getValue (s : substitution) (t1 : tm) : option tm :=
+  match s with
+  | nil => None
+  | (t, t') :: l => if eqb_term t t1 then Some t' else getValue l t
+  end.
+
+Fixpoint hasKeyValue (s : substitution) (t1 t2 : tm) : bool :=
+  match s with
+  | nil => false
+  | (t, t') :: l => if eqb_term t t1 then eqb_term t' t2 else hasKeyValue l t1 t2
+  end.                                                         
+
+Fixpoint make_term_substitution (l1 l2 : list tm)(s : substitution) : option substitution :=
   match l1, l2 with
   | nil, nil => Some s
-  | (tm_const h) :: l, (tm_const h') :: r => if eqb_string h h' then ground_terms l r s else None
-  | (tm_var h) :: l, (tm_const h') :: r => if hasKey s h
-                                  then
-                                    (if hasKeyValue s h h'
-                                     then ground_terms l r s else None) else
-                                    ground_terms l r (h |-> h' ; s)
+  | (tm_const h) :: l, (tm_const h') :: r => if eqb_string h h' then make_term_substitution l r s else None
+  | h :: l, h' :: r => match (getValue s h) with
+                    | Some t => if eqb_term h' t then make_term_substitution l r s else None
+                    | None => make_term_substitution l r (s ++ [(h, h')])
+                    end                      
   | _, _ => None    
   end.
-                                       
-(* A rule has a head and a body. the head is a single non-ground atom, and the body is a list of atoms *)
-Record rule := Rule { head : atom ; body : list atom }.
-                                                                          
-(* This is the classic datalog example rule. *)
-Definition transitivity_rule := Rule ([ var "X" ; var "Z" ]) ([[var "X" ; var "Y"] ; [var "Y" ; var "Z"]]).
 
-Definition EDB := [ ([( const "x" ) ; ( const "y" )]) ; ([( const "y" ) ; ( const "z" )]) ; ([( const "z" ) ; ( const "w" )]) ].
+Definition make_atom_substitution (a1 a2 : atom) (s : substitution) : option substitution :=
+  match a1, a2 with
+  | atom_regular sym l1, atom_ground sym' l2 => if eqb_string sym sym' then make_term_substitution l1 l2 s else None
+  | _, _ => None    
+  end.    
+
+Definition example_regular_atom := (atom_regular "ancestor" [ tm_var "X"; tm_var "Y" ]).
+Definition example_ground_atom := (atom_ground "ancestor" [ tm_const "Frederick"; tm_const "Roderick" ]).
+Definition example_regular_atom_two := (atom_regular "ancestor" [ tm_var "X" ; tm_const "Roderick" ]).
+Definition example_substitution := match (make_atom_substitution example_regular_atom example_ground_atom []) with
+                                   | Some s => s
+                                   | None => []
+                                   end.
+Definition example_substitution_two := match (make_atom_substitution example_regular_atom_two example_ground_atom []) with
+                                       | Some s => s
+                                       | None => []
+                                       end.
+
+Fixpoint substitute_term (l1 acc : list tm) (s : substitution) : list tm :=
+  match l1 with
+  | nil => acc
+  | h :: l => substitute_term l (match (getValue s h) with
+            | Some t => acc ++ [t]
+            | None => acc ++ [h]
+            end) s
+  end.            
+
+Definition substitute_atom (a1 : atom) (s : substitution) : option atom :=
+  match a1 with
+  | atom_regular sym l1 => Some (atom_ground sym (substitute_term l1 [] s))
+  | _ => None    
+  end.
+
+Compute match (substitute_atom example_regular_atom_two example_substitution) with
+        | Some a => a
+        | None => (atom_regular ""%string [])
+        end.
+
+
+
+(* A rule has a head and a body. the head is a single non-ground atom, and the body is a list of atoms *)
+
+
+(* This is the classic datalog example rule. *)
