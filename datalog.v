@@ -196,9 +196,9 @@ Definition KnowledgeBase := list atom.
 
    [ ancestor(adam, jumala), ancestor(eve, adam), ancestor(vanasarvik, jumala) ]
 
-   calling extend_regular_atom will generate the following substitution:
+   calling subsitute_step will generate the following substitutions:
 
-   [ (X, adam), (X, vanasarvik) ]
+   [ [(X, adam)], [(X, vanasarvik)] ]
 
  *)
 Fixpoint substitution_step (kb : KnowledgeBase) (a1 : atom) (acc : list substitution): list substitution :=
@@ -248,7 +248,7 @@ Compute substitution_step example_kb (atom_regular "ancestor" [ tm_var "X" ; tm_
 
    On the second it will do the same, but with worksAt.
 
-   Thus, the final output would be [ [("Y", "takesClassesFrom")] ; [("Y", "worksAt")] ]
+   Thus, the final output would be [ [("X", "student"), ("Y", "takesClassesFrom")] ; [("X", professor), ("Y", "worksAt")] ]
 
  *)
 Fixpoint eval_atom (kb : KnowledgeBase) (a1 : atom) (ls acc : list substitution) : list substitution :=
@@ -256,8 +256,8 @@ Fixpoint eval_atom (kb : KnowledgeBase) (a1 : atom) (ls acc : list substitution)
   | nil, _ => acc
   | h :: l, _ => match substitute_atom a1 h with
             (* If the atom is not ground, then there is a substitution  *)
-            | Some a => let new_substitution := substitution_step kb a [] in
-                       eval_atom kb a1 l (acc ++ new_substitution)
+            | Some a => let new_substitutions := substitution_step kb a [h] in
+                       eval_atom kb a1 l (acc ++ new_substitutions)
             (* Else, skip this substitution *)
             | None => eval_atom kb a1 l acc
             end                   
@@ -358,8 +358,6 @@ Fixpoint substitute_head (head : atom) (substitutions: list substitution) ( acc 
 Definition previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [].
 
 Compute previous_substitutions.
-
-
 
 Compute substitute_head example_rule_head previous_substitutions [].
 
