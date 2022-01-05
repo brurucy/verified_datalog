@@ -1,5 +1,3 @@
-(* This is a tremendously simple certified implementation of a unipredicate datalog engine. *)
-
 Require Import String.
 Require Import List.
 Require Import Bool.Bool.
@@ -118,6 +116,8 @@ Fixpoint getValue (s : substitution) (t1 : tm) : option tm :=
   | nil => None
   | (t, t') :: l => if eqb_term t t1 then Some t' else getValue l t1
   end.
+
+Compute [1;2] ++ [3;4].
 
 Fixpoint make_term_substitution (l1 l2 : list tm)(s : substitution) : option substitution :=
   match l1, l2 with
@@ -251,13 +251,14 @@ Compute substitution_step example_kb (atom_regular "ancestor" [ tm_var "X" ; tm_
    Thus, the final output would be [ [("X", "student"), ("Y", "takesClassesFrom")] ; [("X", professor), ("Y", "worksAt")] ]
 
  *)
+
 Fixpoint eval_atom (kb : KnowledgeBase) (a1 : atom) (ls acc : list substitution) : list substitution :=
   match ls, acc with
   | nil, _ => acc
   | h :: l, _ => match substitute_atom a1 h with
             (* If the atom is not ground, then there is a substitution  *)
-            | Some a => let new_substitutions := substitution_step kb a [h] in
-                       eval_atom kb a1 l (acc ++ new_substitutions)
+            | Some a => let new_substitutions := substitution_step kb a [] in
+                       eval_atom kb a1 l (acc ++ (map (fun x => h ++ x) new_substitutions))
             (* Else, skip this substitution *)
             | None => eval_atom kb a1 l acc
             end                   
@@ -315,12 +316,8 @@ Definition example_rule := cl_rule example_rule_head example_rule_body.
 Fixpoint eval_body (kb : KnowledgeBase) (l1 : list atom) (ls : list substitution) : list substitution :=
   match l1 with
   | nil => ls  
-  | h :: l => match ls with
-            | nil => let atom_genesis := substitution_step kb h [] in
-                    eval_body kb l atom_genesis
-            | _ => let atom_evaluation := eval_atom kb h ls [] in
-                  eval_body kb l (ls ++ atom_evaluation)
-            end
+  | h :: l => let atom_evaluation := eval_atom kb h ls [] in
+                  eval_body kb l atom_evaluation
   end.
 
 Definition example_ground_atom_seven := atom_ground "ancestor" [ tm_const "jumala" ; tm_const "cthulu" ].
@@ -329,7 +326,7 @@ Definition example_kb_three := [ example_ground_atom_two ; example_ground_atom_t
 
 Compute example_kb_three.
 
-Compute eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [].
+Compute eval_body example_kb_three [(atom_regular "ancestor" [ tm_var "X" ; tm_var "Y"]);(atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z"])] [[]].
 
 (*
 
@@ -342,7 +339,18 @@ Compute eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_va
   It is the same as substitute_atom, except that instead of returning an option, and acting on a signle substitution
   it takes in a list of substitutions and applies them to a single atom.
 
-  For instance, applying the 
+  For instance, evaluating the rule ancestor(X, Y), ancestor(Y, Z) -> ancestor(X, Z)
+  over the same knowledge base will yield the following substitutions:
+
+  [[(X, adam), (Y, jumala), (Z, cthulu)];
+   [(X, eve), (Y, adam), (Z, jumala)];
+   [(X, vanasarvik), (Y, jumala), (Z, cthulu)]]
+
+  Which will be substituted against ancestor(X, Z), deriving the following facts:
+
+  [ancestor(adam, cthulu),
+   ancestor(eve, jumala),
+   ancestor(vanasarvik, cthulu)]
 
  *)
 
@@ -355,7 +363,7 @@ Fixpoint substitute_head (head : atom) (substitutions: list substitution) ( acc 
             end
   end.
 
-Definition previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [].
+Definition previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [[]].
 
 Compute previous_substitutions.
 
@@ -364,8 +372,8 @@ Compute substitute_head example_rule_head previous_substitutions [].
 Definition eval_rule (kb : KnowledgeBase) (r : cl) : KnowledgeBase :=
   match r with
   | cl_rule head body =>
-      let substitutions := eval_body kb body [] in
-      substitute_head head substitutions []
+      let substitutions := eval_body kb body [[]] in
+      kb ++ (substitute_head head substitutions [])
   end.
 
 Compute eval_rule example_kb_three example_rule.
