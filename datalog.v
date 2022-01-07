@@ -241,8 +241,8 @@ Fixpoint substitute_term (l1 acc : list tm) (s : substitution) : list tm :=
               substitute_term l (acc ++ [value_lookup]) s
   end.                          
                      
-Fixpoint is_ground (l1 : list tm) : bool :=
-  match l1 with
+Fixpoint is_ground (l : list tm) : bool :=
+  match l with
   | nil => true
   | (tm_const _) :: l => is_ground l
   | _ => false
@@ -490,6 +490,41 @@ Definition is_datalog_rule (r : cl) : bool :=
   | cl_rule (atom_ground  _ _) _    => false                                        
   end.
 
+Definition not_datalog_rule := cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body.
+
+Compute is_datalog_rule not_datalog_rule.
+
+Compute is_datalog_rule example_rule.
+
+(* A knowledge base is extensional if all of its atoms are ground. *)
+Inductive is_extensional : list atom ->  Prop :=
+| ext_nil :
+    is_extensional []
+| ext_cons : forall sym l l',
+    is_ground l = true ->
+    is_extensional l' ->
+    is_extensional ((atom_ground sym l) :: l')
+.  
+
+Theorem extensional_kb_three : is_extensional example_kb_three.
+Proof.
+  try repeat (apply ext_cons; auto).
+  apply ext_nil.
+Qed.
+
+Definition example_kb_four := [example_ground_atom_two ; (atom_ground "ancestor" [(tm_var "X");(tm_const "Y")]) ; example_ground_atom_four ; example_ground_atom_seven].
+
+Theorem not_extensional_kb_four : not (is_extensional example_kb_four).
+Proof.
+  unfold not.
+  intros.
+  inversion H.
+  subst.
+  inversion H4.
+  subst.
+  discriminate H3.
+Qed.
+
 Compute eval_rule example_kb_three (cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body).
 
 Compute eval_rule example_kb_three example_rule.
@@ -497,7 +532,14 @@ Compute eval_rule example_kb_three example_rule.
 Compute eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule.
 
 Compute eval_rule (eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule) example_rule.
+
+(* Now for the grand theorem! *)
+Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
+    is_datalog_rule r = true -> is_extensional kb -> is_extensional (eval_rule kb r).
+Proof.
   
+Qed.
+
 Fixpoint eqb_kb (kb1 kb2 : KnowledgeBase) : bool :=
   match kb1, kb2 with
   | nil, nil => true
