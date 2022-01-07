@@ -16,6 +16,24 @@ Proof.
   - destruct Hs_not_eq. reflexivity.
 Qed.
 
+Theorem eqb_string_sym : forall s s' : string,
+    eqb_string s s' = eqb_string s' s.
+Proof.
+  intros.
+  unfold eqb_string.
+  destruct (string_dec s s').
+  destruct (string_dec s' s).
+  auto.
+  exfalso.
+  apply n.
+  auto.
+  destruct (string_dec s' s).
+  exfalso.
+  apply n.
+  auto.
+  auto.
+Qed.
+
 Theorem eqb_string_true_iff : forall x y : string,
   eqb_string x y = true <-> x = y.
 Proof.
@@ -64,10 +82,28 @@ Definition eqb_term (lterm : tm) (rterm: tm) : bool :=
   | tm_const lvalue, tm_const rvalue => eqb_string lvalue rvalue
   end.
 
-Lemma eqb_term_refl : forall t t' :  tm,
-    eqb_term t t' = true -> eqb_term t' t = true.
+Theorem eqb_term_sym : forall t t' : tm,
+    eqb_term t t' = eqb_term t' t.
 Proof.
-Admitted.
+  intros.
+  induction t, t'; simpl.
+  apply eqb_string_sym.
+  auto.
+  auto.
+  apply eqb_string_sym.
+Qed.
+
+Lemma var_const_ineq : forall v1 v2 : string,
+    eqb_term (tm_var v1) (tm_const v2) = false.
+Proof.
+  trivial.
+Qed.
+
+Lemma const_var_ineq : forall v1 v2 : string,
+    eqb_term (tm_const v1) (tm_var v2) = false.
+Proof.
+  trivial.
+Qed.
 
 Compute eqb_term (tm_const "Professor") (tm_var "Professor").
 Compute eqb_term (tm_var "Professor") (tm_const "Professor").
@@ -76,7 +112,7 @@ Compute eqb_term (tm_var "Professor") (tm_var "Professor").
 Compute eqb_term (tm_const "X") (tm_const "Y").
 Compute eqb_term (tm_var "X") (tm_const "Y").
 
-(* Atoms are just conjunctions of of terms with a symbol *)
+(* Atoms are just conjunctions of terms with a symbol *)
 Inductive atom : Type :=
   (* They can be ground, if all terms are constants *)
   | atom_ground : string -> list tm -> atom
@@ -95,17 +131,64 @@ Fixpoint eqb_term_list (l1 l2 : list tm) : bool :=
   | _, _ => false                                                                 
   end.
 
-Lemma eqb_term_list_refl : forall t t' :  tm,
-    eqb_term t t' = true -> eqb_term t' t = true.
+Theorem eqb_term_list_sym : forall t t' :  list tm,
+    eqb_term_list t t' = eqb_term_list t' t.
 Proof.
-Admitted.
+  intros.
+  generalize dependent t'.
+  induction t; intros.
+  - destruct t'.
+    auto.
+    auto.
+  - destruct t'.
+    auto.
+    assert (H1: eqb_term a t0 = eqb_term t0 a).
+    apply eqb_term_sym.
+    simpl.
+    destruct (eqb_term a t0).
+    destruct (eqb_term t0 a).
+    specialize IHt with t'.
+    apply IHt.
+    discriminate.
+    rewrite H1.
+    destruct (eqb_term t0 a).
+    discriminate.
+    auto.
+Qed.
 
 Definition eqb_atom (latom : atom) (ratom : atom) : bool :=
   match latom, ratom with                                       
-  | atom_ground sym l1, atom_ground sym' l2 => if eqb_string sym sym' then eqb_term_list l1 l2 else false
+  | atom_ground sym l1, atom_ground sym' l2  => if eqb_string sym sym' then eqb_term_list l1 l2 else false
   | atom_regular sym l1, atom_regular sym' l2 => if eqb_string sym sym' then eqb_term_list l1 l2 else false
   | _, _ => false                              
   end.
+
+Theorem eqb_atom_sym : forall a a' : atom,
+    eqb_atom a a' = eqb_atom a' a.
+Proof.
+  intros.
+  destruct a, a'; simpl.
+  - rewrite eqb_term_list_sym.
+    rewrite eqb_string_sym.
+    auto.
+  - auto.
+  - auto.
+  - rewrite eqb_term_list_sym.
+    rewrite eqb_string_sym.
+    auto.
+Qed.
+
+Lemma regular_ground_ineq : forall (sym1 sym2 : string) (l1 l2 : list tm),
+    eqb_atom (atom_ground sym1 l1) (atom_regular sym2 l2) = false.
+Proof.
+  trivial.
+Qed.
+
+Lemma ground_regular_ineq : forall (sym1 sym2 : string) (l1 l2 : list tm),
+    eqb_atom (atom_ground sym1 l1) (atom_regular sym2 l2) = false.
+Proof.
+  trivial.
+Qed.
 
 (* A substitution is a mapping from a regular term to another regular or ground term *)
 (* I could have used a map, but maps don't have an easy way to recurisvely traverse them. *)
@@ -117,13 +200,11 @@ Fixpoint getValue (s : substitution) (t1 : tm) : option tm :=
   | (t, t') :: l => if eqb_term t t1 then Some t' else getValue l t1
   end.
 
-Compute [1;2] ++ [3;4].
-
 Fixpoint make_term_substitution (l1 l2 : list tm)(s : substitution) : option substitution :=
   match l1, l2 with
   | nil, nil => Some s
   | (tm_const h) :: l, (tm_const h') :: r => if eqb_string h h' then make_term_substitution l r s else None
-  | h :: l, h' :: r => match (getValue s h) with
+  | h :: l, h' :: r => match getValue s h with
                     | Some t => if eqb_term h' t then make_term_substitution l r s else None
                     | None => make_term_substitution l r (s ++ [(h, h')])
                     end                      
@@ -373,7 +454,77 @@ Definition eval_rule (kb : KnowledgeBase) (r : cl) : KnowledgeBase :=
   match r with
   | cl_rule head body =>
       let substitutions := eval_body kb body [[]] in
-      kb ++ (substitute_head head substitutions [])
+      (substitute_head head substitutions [])
   end.
 
+(* A datalog rule MUST have all of the terms in its head show up in the body, otherwise eval_rule will not yield only ground atoms!! *)
+
+Fixpoint is_term_in_term_list (l : list tm) (t : tm) : bool :=
+  match l with
+  | nil => false
+  | h :: l' => if eqb_term t h then true else is_term_in_term_list l' t
+  end.
+
+Fixpoint is_there_some_true (l : list bool) : bool :=
+  match l with
+  | nil => false
+  | h :: l' => if h then true else is_there_some_true l'
+  end.
+
+Fixpoint is_it_all_true (l : list bool) : bool :=
+  match l with
+  | nil => true
+  | h :: l' => if h then is_it_all_true l' else false
+  end.
+
+Definition is_datalog_rule (r : cl) : bool :=
+  match r with
+  | cl_rule (atom_regular _ l) body =>
+      let body_check := map (fun term =>
+                               map (fun x =>
+                                      match x with
+                                      | atom_regular sym l | atom_ground sym l => is_term_in_term_list l term
+                                      end ) body ) l in
+      let head_check := map (fun term_truth_list => is_there_some_true term_truth_list) body_check in
+      is_it_all_true head_check
+  | cl_rule (atom_ground  _ _) _    => false                                        
+  end.
+
+Compute eval_rule example_kb_three (cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body).
+
 Compute eval_rule example_kb_three example_rule.
+
+Compute eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule.
+
+Compute eval_rule (eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule) example_rule.
+  
+Fixpoint eqb_kb (kb1 kb2 : KnowledgeBase) : bool :=
+  match kb1, kb2 with
+  | nil, nil => true
+  | h :: l, h' :: l' => if eqb_atom h h' then eqb_kb l l' else false
+  | _, _ => false                                                            
+  end.
+
+Fixpoint has (kb : KnowledgeBase) (a : atom) : bool :=
+  match kb with
+  | nil => false
+  | h :: l => if eqb_atom h a then true else has l a
+  end.
+
+Fixpoint distinct (kb : KnowledgeBase) (acc : KnowledgeBase) : KnowledgeBase :=
+  match kb, acc with
+  | nil, _ => []
+  | h :: l, acc => match has acc h with
+                 | true => distinct l acc
+                 | false => h :: (distinct l (h :: acc))
+                 end
+  end.
+
+Fixpoint calculate_minimal_model (kb : KnowledgeBase) (r : cl)
+  : KnowledgeBase :=
+  let clean_kb := distinct kb [] in
+  let evaluation := eval_rule clean_kb r in
+  match evaluation with
+  | nil => kb
+  | _ => calculate_minimal_model (clean_kb ++ evaluation) r
+  end.
