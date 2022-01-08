@@ -73,6 +73,8 @@ Check tm_const "Professor".
 (* And variables usually have uppercase single-letter names *)
 Check tm_var "X".
 
+Definition is_const t := match t with tm_const _ => True | _ => False end.
+
 (* A variable cannot ever equal a constant, but a variable can equal another variable, and the same also holds true for constants. *)
 Definition eqb_term (lterm : tm) (rterm: tm) : bool :=
   match lterm, rterm with
@@ -120,8 +122,15 @@ Inductive atom : Type :=
   | atom_regular : string -> list tm -> atom
 .                                                                                 
 
+Inductive well_formed : atom -> Prop :=
+  | well_formed_ground : forall sym l,
+      Forall is_const l ->
+      well_formed (atom_ground sym l)
+  | well_formed_regular : forall sym l,
+      well_formed (atom_regular sym l)
+.
+
 (* Atoms' symbols are lowercase.*)
-Check (atom_regular "ancestor" [tm_var "X" ; tm_var "Y"]).
 
 (* An atom equals another one if all of its terms equal the other's *)
 Fixpoint eqb_term_list (l1 l2 : list tm) : bool :=
@@ -497,19 +506,21 @@ Compute is_datalog_rule not_datalog_rule.
 Compute is_datalog_rule example_rule.
 
 (* A knowledge base is extensional if all of its atoms are ground. *)
+Definition is_ground' a := match a with atom_ground _ _ => True | _ => False end.
+
 Inductive is_extensional : list atom ->  Prop :=
 | ext_nil :
     is_extensional []
-| ext_cons : forall sym l l',
-    is_ground l = true ->
+| ext_cons : forall a l',
+    is_ground' a ->
+    well_formed a ->
     is_extensional l' ->
-    is_extensional ((atom_ground sym l) :: l')
-.  
+    is_extensional (a :: l')
+.                   
 
 Theorem extensional_kb_three : is_extensional example_kb_three.
 Proof.
-  try repeat (apply ext_cons; auto).
-  apply ext_nil.
+  try repeat constructor.
 Qed.
 
 Definition example_kb_four := [example_ground_atom_two ; (atom_ground "ancestor" [(tm_var "X");(tm_const "Y")]) ; example_ground_atom_four ; example_ground_atom_seven].
@@ -520,9 +531,15 @@ Proof.
   intros.
   inversion H.
   subst.
+  inversion H3.
+  subst.
   inversion H4.
   subst.
-  discriminate H3.
+  inversion H7.
+  subst.
+  inversion H5.
+  subst.
+  contradiction H10.
 Qed.
 
 Compute eval_rule example_kb_three (cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body).
@@ -546,8 +563,7 @@ Proof.
     destruct is_it_all_true.
     -- intros.
        clear H.
-       destruct eval_body.
-       simpl.
+       destruct (eval_body kb l) eqn: E.
        constructor.
        admit.
     -- discriminate.
