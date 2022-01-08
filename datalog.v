@@ -511,11 +511,9 @@ Definition is_ground' a := match a with atom_ground _ _ => True | _ => False end
 Inductive is_extensional : list atom ->  Prop :=
 | ext_nil :
     is_extensional []
-| ext_cons : forall a l',
-    is_ground' a ->
-    well_formed a ->
-    is_extensional l' ->
-    is_extensional (a :: l')
+| ext_cons : forall l : list atom,
+    Forall (fun a => is_ground' a /\ well_formed a) l ->
+    is_extensional l
 .                   
 
 Theorem extensional_kb_three : is_extensional example_kb_three.
@@ -531,15 +529,16 @@ Proof.
   intros.
   inversion H.
   subst.
-  inversion H3.
+  inversion H0.
   subst.
   inversion H4.
   subst.
+  destruct H5.
+  inversion H2.
+  subst.
   inversion H7.
   subst.
-  inversion H5.
-  subst.
-  contradiction H10.
+  contradiction H9.
 Qed.
 
 Compute eval_rule example_kb_three (cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body).
