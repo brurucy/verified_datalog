@@ -118,7 +118,7 @@ Inductive atom : Type :=
   | atom_ground : string -> list tm -> atom
   (* Or regular, if else *)                                   
   | atom_regular : string -> list tm -> atom
-.                                 
+.                                                                                 
 
 (* Atoms' symbols are lowercase.*)
 Check (atom_regular "ancestor" [tm_var "X" ; tm_var "Y"]).
@@ -537,7 +537,20 @@ Compute eval_rule (eval_rule (example_kb_three ++ (eval_rule example_kb_three ex
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
     is_datalog_rule r = true -> is_extensional kb -> is_extensional (eval_rule kb r).
 Proof.
-  
+  intros kb.
+  unfold eval_rule.
+  destruct r.
+  destruct a.
+  - discriminate.
+  - simpl.
+    destruct is_it_all_true.
+    -- intros.
+       clear H.
+       destruct eval_body.
+       simpl.
+       constructor.
+       admit.
+    -- discriminate.
 Qed.
 
 Fixpoint eqb_kb (kb1 kb2 : KnowledgeBase) : bool :=
