@@ -317,8 +317,19 @@ Fixpoint is_it_all_true (l : list bool) : bool :=
   | h :: l' => if h then is_it_all_true l' else false
   end.
 
+
+Inductive atom_contains (term:tm) : atom -> Prop :=
+  | regular_containts l sym : In term l -> atom_contains term (atom_regular sym l)
+  | ground_containts l sym : In term l -> atom_contains term (atom_ground sym l)
+.
+
+Inductive is_datalog_rule : cl -> Prop :=
+  regular_datalog : forall sym head_terms body,
+    Forall (fun term => Exists (atom_contains term) body) head_terms
+    -> is_datalog_rule (cl_rule (atom_regular sym head_terms) body).  
+
 (* A datalog rule MUST have all of the terms in its head show up in the body, otherwise eval_rule will not yield only ground atoms!! *)
-Definition is_datalog_rule (r : cl) : bool :=
+Definition is_datalog_rule_dec (r : cl) : bool :=
   match r with
   | cl_rule (atom_regular _ l) body =>
       let body_check := map (fun term =>
@@ -330,6 +341,197 @@ Definition is_datalog_rule (r : cl) : bool :=
       is_it_all_true head_check
   | cl_rule (atom_ground  _ _) _    => false                                        
   end.
+
+Lemma is_it_all_true_map_Forall A p r: is_it_all_true (map p r) = true <-> @Forall A (fun x => p x = true) r.
+Proof.
+  split; induction r; intros; try trivial.
+  + simpl in H. constructor. destruct (p a). trivial. inversion H.
+    apply IHr. destruct (p a). apply H. inversion H.
+  + simpl. inversion H. subst. rewrite H2. apply IHr, H3.    
+Qed.
+
+Lemma is_there_some_true_map_Exists A p r:
+  is_there_some_true (map p r) = true <-> @Exists A (fun x => p x = true) r.
+Proof.
+  split; induction r; intros.
+  + simpl in H. inversion H.
+  + simpl in H. destruct (p a) eqn:E. constructor 1. trivial.
+    constructor 2. apply IHr, H.
+  + inversion H.
+  + simpl; inversion H; subst. rewrite H1. trivial.
+    destruct (p a). trivial. apply IHr, H1.
+Qed.
+
+Example bla := [ tm_const "A" ; tm_var "B"].
+
+Example ok: In (tm_const "A") bla.
+Proof.
+  simpl.
+  left.
+  auto.
+Qed. 
+
+Lemma eqb_term_eq : forall t1 t2,
+    eqb_term t1 t2 = true <-> t1 = t2.
+Proof.
+  intros t1.
+  destruct t1.
+  - simpl.
+    destruct t2.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       rewrite e.
+       constructor 1.
+       --- auto.
+       --- auto.
+       --- constructor 1.
+           ---- intros.
+                discriminate.
+           ---- intros.
+                inversion H.
+                contradiction H1.
+    -- constructor 1.
+       --- intros.
+           discriminate H.
+       --- intros.
+           discriminate H.
+  - simpl.
+    destruct t2.
+    -- constructor 1.
+       discriminate.
+       discriminate.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       --- rewrite e.
+           constructor 1.
+           auto.
+           auto.
+       --- constructor 1.
+           discriminate.
+           intros.
+           exfalso.
+           apply n.
+           injection H.
+           intros.
+           apply H0.
+Qed.
+
+Lemma eqb_term_neq : forall t1 t2,
+    eqb_term t1 t2 = false <-> t1 <> t2.
+Proof.
+  intros t1.
+  destruct t1.
+  - simpl.
+    destruct t2.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       --- constructor 1.
+           ---- discriminate.
+           ---- intros H.
+                elim H.
+                rewrite e.
+                auto.
+       --- constructor 1.
+           ---- intros H.
+                unfold not.
+                intros.
+                inversion H0.
+                contradiction.
+           ---- intros.
+                trivial.
+    -- constructor 1.
+       --- intros.
+           exfalso.
+
+Qed.
+  
+Lemma is_in_term_list_In l term:
+  is_term_in_term_list l term = true <-> In term l.
+Proof.
+  induction l.
+  - simpl.
+    constructor 1.
+    intros.
+    discriminate.
+    -- intros.
+       inversion H.
+  - destruct (eqb_term term a) eqn:E.
+    -- simpl.
+       rewrite E.
+       constructor 1.
+       --- intros H.
+           left.
+           rewrite eqb_term_eq in E.
+           auto.
+       --- trivial.
+    -- simpl.
+       rewrite E.
+       constructor 1.
+       --- right.
+           apply IHl.
+           auto.
+       --- intros H.
+           destruct H.
+           ---- 
+Qed.
+
+Lemma map_fusion {A B C} f g xs: @map B C f (@map A B g xs) = @map A C (fun x => f (g x)) xs.
+Proof.
+  induction xs. trivial. simpl. rewrite IHxs. reflexivity.  
+Qed.
+
+Lemma atom_contains_dec x term:
+      match x with 
+        | atom_ground _ l | atom_regular _ l => is_term_in_term_list l term
+      end = true <-> atom_contains term x.
+Proof.
+  split.
+  intros.
+  - induction x.
+    -- assert {forall l term : is_term_in_term_list l term -> In term l}.
+       
+Admitted.
+
+Lemma rewrite_forall_cond {A} p q xs: (forall x, p x <-> q x) -> @Forall A p xs <-> @Forall A q xs.
+Proof.
+  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
+  + constructor. apply H. trivial. apply (IHxs H), H4.
+  + constructor. apply H. trivial. apply (IHxs H), H4.
+Qed.
+
+Lemma rewrite_exists_cond {A} p q xs: (forall x, p x <-> q x) -> @Exists A p xs <-> @Exists A q xs.
+Proof.
+  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
+  + constructor. apply H. trivial. 
+  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
+  + constructor. apply H. trivial. 
+  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
+Qed.
+
+Lemma is_datalog_rule_correct r: is_datalog_rule_dec r = true <-> is_datalog_rule r.
+Proof.
+ split; intros H. 
+  - destruct r, a. + simpl in H. inversion H.
+    + apply regular_datalog. 
+    eapply rewrite_forall_cond. intros.
+    eapply rewrite_exists_cond. intros.
+    apply iff_sym. apply atom_contains_dec.
+    eapply rewrite_forall_cond. intros.
+    apply iff_sym, is_there_some_true_map_Exists. 
+    rewrite <- is_it_all_true_map_Forall.
+    rewrite <- map_fusion.
+    apply H.
+  - induction H. simpl. 
+    rewrite map_fusion.
+    apply is_it_all_true_map_Forall.
+    eapply rewrite_forall_cond. intros.
+    apply is_there_some_true_map_Exists. 
+    simpl.
+    eapply rewrite_forall_cond. intros.
+    eapply rewrite_exists_cond. intros. 
+    apply atom_contains_dec.
+    apply H.
+Qed.
 
 Fixpoint eqb_kb (kb1 kb2 : KnowledgeBase) : bool :=
   match kb1, kb2 with
@@ -371,17 +573,17 @@ Compute eqb_term (tm_var "Professor") (tm_var "Professor").
 Compute eqb_term (tm_const "X") (tm_const "Y").
 Compute eqb_term (tm_var "X") (tm_const "Y").
 
-Definition example_regular_atom := atom_regular "ancestor" [ tm_var "X"; tm_var "Y" ].
-Definition example_ground_atom := atom_ground "ancestor" [ tm_const "Frederick"; tm_const "Roderick" ].
-Definition example_regular_atom_two := atom_regular "ancestor" [ tm_var "X" ; tm_const "Roderick" ].
-Definition example_regular_atom_three := atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ].
+Example example_regular_atom := atom_regular "ancestor" [ tm_var "X"; tm_var "Y" ].
+Example example_ground_atom := atom_ground "ancestor" [ tm_const "Frederick"; tm_const "Roderick" ].
+Example example_regular_atom_two := atom_regular "ancestor" [ tm_var "X" ; tm_const "Roderick" ].
+Example example_regular_atom_three := atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ].
 (* [(tm_var "X", tm_const "Frederick"), (tm_var "Y", tm_const "Roderick")] *)
-Definition example_substitution := match (make_atom_substitution example_regular_atom example_ground_atom) with
+Example example_substitution := match (make_atom_substitution example_regular_atom example_ground_atom) with
                                    | Some s => s
                                    | None => []
                                    end.
 (* [(tm_var "X", tm_const "Frederick")] *)
-Definition example_substitution_two := match (make_atom_substitution example_regular_atom_two example_ground_atom) with
+Example example_substitution_two := match (make_atom_substitution example_regular_atom_two example_ground_atom) with
                                        | Some s => s
                                        | None => []
                                        end.
@@ -390,42 +592,42 @@ Compute substitute_atom example_regular_atom example_substitution.
 
 Compute substitute_atom example_regular_atom_three example_substitution.
 
-Definition example_ground_atom_two := atom_ground "ancestor" [ tm_const "adam" ; tm_const "jumala"].
-Definition example_ground_atom_three := atom_ground "ancestor" [ tm_const "eve" ; tm_const "adam"].
-Definition example_ground_atom_four := atom_ground "ancestor" [ tm_const "vanasarvik" ; tm_const "jumala"].
+Example example_ground_atom_two := atom_ground "ancestor" [ tm_const "adam" ; tm_const "jumala"].
+Example example_ground_atom_three := atom_ground "ancestor" [ tm_const "eve" ; tm_const "adam"].
+Example example_ground_atom_four := atom_ground "ancestor" [ tm_const "vanasarvik" ; tm_const "jumala"].
 
-Definition example_kb := [ example_ground_atom_two; example_ground_atom_three; example_ground_atom_four ].
+Example example_kb := [ example_ground_atom_two; example_ground_atom_three; example_ground_atom_four ].
 
 Compute substitution_step example_kb (atom_regular "ancestor" [ tm_var "X" ; tm_const "jumala" ]) [].
 
-Definition example_ground_atom_five := atom_ground "T" [ tm_const "student" ; tm_const "takesClassesFrom" ; tm_const "PLlab"].
-Definition example_ground_atom_six := atom_ground "T" [ tm_const "professor" ; tm_const "worksAt" ; tm_const "PLlab"].
+Example example_ground_atom_five := atom_ground "T" [ tm_const "student" ; tm_const "takesClassesFrom" ; tm_const "PLlab"].
+Example example_ground_atom_six := atom_ground "T" [ tm_const "professor" ; tm_const "worksAt" ; tm_const "PLlab"].
 
-Definition example_regular_atom_four := atom_regular "T" [ tm_var "X" ; tm_var "Y" ; tm_const "PLlab" ].
+Example example_regular_atom_four := atom_regular "T" [ tm_var "X" ; tm_var "Y" ; tm_const "PLlab" ].
 
-Definition example_substitution_three := [ (tm_var "X", tm_const "student") ].
-Definition example_substitution_four := [ (tm_var "X", tm_const "professor") ].
-Definition example_substitution_list := [ example_substitution_three ; example_substitution_four ].
+Example example_substitution_three := [ (tm_var "X", tm_const "student") ].
+Example example_substitution_four := [ (tm_var "X", tm_const "professor") ].
+Example example_substitution_list := [ example_substitution_three ; example_substitution_four ].
 
-Definition example_kb_two := [ example_ground_atom_five ; example_ground_atom_six ].
+Example example_kb_two := [ example_ground_atom_five ; example_ground_atom_six ].
 
 Compute eval_atom example_kb_two example_regular_atom_four example_substitution_list [].
 
-Definition example_ground_atom_seven := atom_ground "ancestor" [ tm_const "jumala" ; tm_const "cthulu" ].
+Example example_ground_atom_seven := atom_ground "ancestor" [ tm_const "jumala" ; tm_const "cthulu" ].
 
-Definition example_kb_three := [ example_ground_atom_two ; example_ground_atom_three ; example_ground_atom_four ; example_ground_atom_seven ].
+Example example_kb_three := [ example_ground_atom_two ; example_ground_atom_three ; example_ground_atom_four ; example_ground_atom_seven ].
 
 Compute example_kb_three.
 
 Compute eval_body example_kb_three [(atom_regular "ancestor" [ tm_var "X" ; tm_var "Y"]);(atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z"])] [[]].
 
-Definition previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [[]].
+Example previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [[]].
 
 Compute previous_substitutions.
 
 Compute substitute_head example_rule_head previous_substitutions [].
 
-Definition not_datalog_rule := cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body.
+Example not_datalog_rule := cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body.
 
 Compute is_datalog_rule not_datalog_rule.
 
