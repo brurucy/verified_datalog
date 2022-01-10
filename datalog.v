@@ -342,197 +342,6 @@ Definition is_datalog_rule_dec (r : cl) : bool :=
   | cl_rule (atom_ground  _ _) _    => false                                        
   end.
 
-Lemma is_it_all_true_map_Forall A p r: is_it_all_true (map p r) = true <-> @Forall A (fun x => p x = true) r.
-Proof.
-  split; induction r; intros; try trivial.
-  + simpl in H. constructor. destruct (p a). trivial. inversion H.
-    apply IHr. destruct (p a). apply H. inversion H.
-  + simpl. inversion H. subst. rewrite H2. apply IHr, H3.    
-Qed.
-
-Lemma is_there_some_true_map_Exists A p r:
-  is_there_some_true (map p r) = true <-> @Exists A (fun x => p x = true) r.
-Proof.
-  split; induction r; intros.
-  + simpl in H. inversion H.
-  + simpl in H. destruct (p a) eqn:E. constructor 1. trivial.
-    constructor 2. apply IHr, H.
-  + inversion H.
-  + simpl; inversion H; subst. rewrite H1. trivial.
-    destruct (p a). trivial. apply IHr, H1.
-Qed.
-
-Example bla := [ tm_const "A" ; tm_var "B"].
-
-Example ok: In (tm_const "A") bla.
-Proof.
-  simpl.
-  left.
-  auto.
-Qed. 
-
-Lemma eqb_term_eq : forall t1 t2,
-    eqb_term t1 t2 = true <-> t1 = t2.
-Proof.
-  intros t1.
-  destruct t1.
-  - simpl.
-    destruct t2.
-    -- unfold eqb_string.
-       destruct (string_dec s s0).
-       rewrite e.
-       constructor 1.
-       --- auto.
-       --- auto.
-       --- constructor 1.
-           ---- intros.
-                discriminate.
-           ---- intros.
-                inversion H.
-                contradiction H1.
-    -- constructor 1.
-       --- intros.
-           discriminate H.
-       --- intros.
-           discriminate H.
-  - simpl.
-    destruct t2.
-    -- constructor 1.
-       discriminate.
-       discriminate.
-    -- unfold eqb_string.
-       destruct (string_dec s s0).
-       --- rewrite e.
-           constructor 1.
-           auto.
-           auto.
-       --- constructor 1.
-           discriminate.
-           intros.
-           exfalso.
-           apply n.
-           injection H.
-           intros.
-           apply H0.
-Qed.
-
-Lemma eqb_term_neq : forall t1 t2,
-    eqb_term t1 t2 = false <-> t1 <> t2.
-Proof.
-  intros t1.
-  destruct t1.
-  - simpl.
-    destruct t2.
-    -- unfold eqb_string.
-       destruct (string_dec s s0).
-       --- constructor 1.
-           ---- discriminate.
-           ---- intros H.
-                elim H.
-                rewrite e.
-                auto.
-       --- constructor 1.
-           ---- intros H.
-                unfold not.
-                intros.
-                inversion H0.
-                contradiction.
-           ---- intros.
-                trivial.
-    -- constructor 1.
-       --- intros.
-           exfalso.
-
-Qed.
-  
-Lemma is_in_term_list_In l term:
-  is_term_in_term_list l term = true <-> In term l.
-Proof.
-  induction l.
-  - simpl.
-    constructor 1.
-    intros.
-    discriminate.
-    -- intros.
-       inversion H.
-  - destruct (eqb_term term a) eqn:E.
-    -- simpl.
-       rewrite E.
-       constructor 1.
-       --- intros H.
-           left.
-           rewrite eqb_term_eq in E.
-           auto.
-       --- trivial.
-    -- simpl.
-       rewrite E.
-       constructor 1.
-       --- right.
-           apply IHl.
-           auto.
-       --- intros H.
-           destruct H.
-           ---- 
-Qed.
-
-Lemma map_fusion {A B C} f g xs: @map B C f (@map A B g xs) = @map A C (fun x => f (g x)) xs.
-Proof.
-  induction xs. trivial. simpl. rewrite IHxs. reflexivity.  
-Qed.
-
-Lemma atom_contains_dec x term:
-      match x with 
-        | atom_ground _ l | atom_regular _ l => is_term_in_term_list l term
-      end = true <-> atom_contains term x.
-Proof.
-  split.
-  intros.
-  - induction x.
-    -- assert {forall l term : is_term_in_term_list l term -> In term l}.
-       
-Admitted.
-
-Lemma rewrite_forall_cond {A} p q xs: (forall x, p x <-> q x) -> @Forall A p xs <-> @Forall A q xs.
-Proof.
-  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
-  + constructor. apply H. trivial. apply (IHxs H), H4.
-  + constructor. apply H. trivial. apply (IHxs H), H4.
-Qed.
-
-Lemma rewrite_exists_cond {A} p q xs: (forall x, p x <-> q x) -> @Exists A p xs <-> @Exists A q xs.
-Proof.
-  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
-  + constructor. apply H. trivial. 
-  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
-  + constructor. apply H. trivial. 
-  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
-Qed.
-
-Lemma is_datalog_rule_correct r: is_datalog_rule_dec r = true <-> is_datalog_rule r.
-Proof.
- split; intros H. 
-  - destruct r, a. + simpl in H. inversion H.
-    + apply regular_datalog. 
-    eapply rewrite_forall_cond. intros.
-    eapply rewrite_exists_cond. intros.
-    apply iff_sym. apply atom_contains_dec.
-    eapply rewrite_forall_cond. intros.
-    apply iff_sym, is_there_some_true_map_Exists. 
-    rewrite <- is_it_all_true_map_Forall.
-    rewrite <- map_fusion.
-    apply H.
-  - induction H. simpl. 
-    rewrite map_fusion.
-    apply is_it_all_true_map_Forall.
-    eapply rewrite_forall_cond. intros.
-    apply is_there_some_true_map_Exists. 
-    simpl.
-    eapply rewrite_forall_cond. intros.
-    eapply rewrite_exists_cond. intros. 
-    apply atom_contains_dec.
-    apply H.
-Qed.
-
 Fixpoint eqb_kb (kb1 kb2 : KnowledgeBase) : bool :=
   match kb1, kb2 with
   | nil, nil => true
@@ -618,6 +427,8 @@ Example example_ground_atom_seven := atom_ground "ancestor" [ tm_const "jumala" 
 Example example_kb_three := [ example_ground_atom_two ; example_ground_atom_three ; example_ground_atom_four ; example_ground_atom_seven ].
 
 Compute example_kb_three.
+
+Example example_kb_four := [example_ground_atom_two ; (atom_ground "ancestor" [(tm_var "X");(tm_const "Y")]) ; example_ground_atom_four ; example_ground_atom_seven].
 
 Compute eval_body example_kb_three [(atom_regular "ancestor" [ tm_var "X" ; tm_var "Y"]);(atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z"])] [[]].
 
@@ -773,8 +584,6 @@ Proof.
   try repeat constructor.
 Qed.
 
-Definition example_kb_four := [example_ground_atom_two ; (atom_ground "ancestor" [(tm_var "X");(tm_const "Y")]) ; example_ground_atom_four ; example_ground_atom_seven].
-
 Theorem not_extensional_kb_four : not (is_extensional example_kb_four).
 Proof.
   unfold not.
@@ -793,17 +602,236 @@ Proof.
   contradiction H9.
 Qed.
 
-Compute eval_rule example_kb_three (cl_rule (atom_regular "ancestor" [tm_var "X"; tm_var "W"]) example_rule_body).
+Lemma is_it_all_true_map_Forall A p r: is_it_all_true (map p r) = true <-> @Forall A (fun x => p x = true) r.
+Proof.
+  split; induction r; intros; try trivial.
+  + simpl in H. constructor. destruct (p a). trivial. inversion H.
+    apply IHr. destruct (p a). apply H. inversion H.
+  + simpl. inversion H. subst. rewrite H2. apply IHr, H3.    
+Qed.
 
-Compute eval_rule example_kb_three example_rule.
+Lemma is_there_some_true_map_Exists A p r:
+  is_there_some_true (map p r) = true <-> @Exists A (fun x => p x = true) r.
+Proof.
+  split; induction r; intros.
+  + simpl in H. inversion H.
+  + simpl in H. destruct (p a) eqn:E. constructor 1. trivial.
+    constructor 2. apply IHr, H.
+  + inversion H.
+  + simpl; inversion H; subst. rewrite H1. trivial.
+    destruct (p a). trivial. apply IHr, H1.
+Qed.
 
-Compute eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule.
+Lemma eqb_term_eq : forall t1 t2,
+    eqb_term t1 t2 = true <-> t1 = t2.
+Proof.
+  intros t1.
+  destruct t1.
+  - simpl.
+    destruct t2.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       rewrite e.
+       constructor 1.
+       --- auto.
+       --- auto.
+       --- constructor 1.
+           ---- intros.
+                discriminate.
+           ---- intros.
+                inversion H.
+                contradiction H1.
+    -- constructor 1.
+       --- intros.
+           discriminate H.
+       --- intros.
+           discriminate H.
+  - simpl.
+    destruct t2.
+    -- constructor 1.
+       discriminate.
+       discriminate.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       --- rewrite e.
+           constructor 1.
+           auto.
+           auto.
+       --- constructor 1.
+           discriminate.
+           intros.
+           exfalso.
+           apply n.
+           injection H.
+           intros.
+           apply H0.
+Qed.
 
-Compute eval_rule (eval_rule (example_kb_three ++ (eval_rule example_kb_three example_rule)) example_rule) example_rule.
+Lemma eqb_term_neq : forall t1 t2,
+    eqb_term t1 t2 = false <-> t1 <> t2.
+Proof.
+  intros t1.
+  induction t1.
+  - simpl.
+    destruct t2 eqn:E.
+    -- unfold eqb_string.
+       destruct (string_dec s s0).
+       --- constructor 1.
+           ---- discriminate.
+           ---- intros H.
+                elim H.
+                rewrite e.
+                auto.
+       --- constructor 1.
+           ---- intros H.
+                unfold not.
+                intros.
+                inversion H0.
+                contradiction.
+           ---- intros.
+                trivial.
+    -- constructor 1.
+       --- discriminate.
+       --- auto.
+  - constructor 1.
+    intros H.
+    unfold eqb_term in H.
+    -- destruct t2 eqn:E.
+       --- discriminate.
+       --- unfold eqb_string in H.
+           destruct (string_dec s s0).
+           ---- discriminate.
+           ---- unfold not.
+                intros.
+                apply n.
+                inversion H0.
+                auto.
+    -- intros.
+       destruct t2.
+       --- auto.
+       --- intuition.
+           simpl.
+           unfold eqb_string.
+           destruct (string_dec s s0).
+           elim H.
+           rewrite e.
+           auto.
+           auto.
+Qed.
+  
+Lemma is_in_term_list_In l term:
+  is_term_in_term_list l term = true <-> In term l.
+Proof.
+  induction l.
+  - simpl.
+    constructor 1.
+    intros.
+    discriminate.
+    -- intros.
+       inversion H.
+  - destruct (eqb_term term a) eqn:E.
+    -- simpl.
+       rewrite E.
+       constructor 1.
+       --- intros H.
+           left.
+           rewrite eqb_term_eq in E.
+           auto.
+       --- trivial.
+    -- simpl.
+       rewrite E.
+       constructor 1.
+       --- right.
+           apply IHl.
+           auto.
+       --- intros H.
+           destruct H.
+           ---- rewrite eqb_term_neq in E.
+                elim E.
+                subst.
+                auto.
+           ---- apply IHl.
+                auto.
+Qed.
+
+Lemma map_fusion {A B C} f g xs: @map B C f (@map A B g xs) = @map A C (fun x => f (g x)) xs.
+Proof.
+  induction xs. trivial. simpl. rewrite IHxs. reflexivity.  
+Qed.
+
+Lemma atom_contains_dec x term:
+      match x with 
+        | atom_ground _ l | atom_regular _ l => is_term_in_term_list l term
+      end = true <-> atom_contains term x.
+Proof.
+  generalize dependent term.
+  - induction x.
+    -- constructor 1.
+       intuition.
+       --- rewrite is_in_term_list_In in H.
+           constructor.
+           auto.
+       --- intros.
+           inversion H.
+           subst.
+           rewrite is_in_term_list_In.
+           auto.
+    -- intros.
+       constructor.
+       --- constructor.
+           apply is_in_term_list_In.
+           auto.
+       --- intros H.
+           inversion H.
+           subst.
+           rewrite <- is_in_term_list_In in H1.
+           auto.
+Qed.          
+
+Lemma rewrite_forall_cond {A} p q xs: (forall x, p x <-> q x) -> @Forall A p xs <-> @Forall A q xs.
+Proof.
+  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
+  + constructor. apply H. trivial. apply (IHxs H), H4.
+  + constructor. apply H. trivial. apply (IHxs H), H4.
+Qed.
+
+Lemma rewrite_exists_cond {A} p q xs: (forall x, p x <-> q x) -> @Exists A p xs <-> @Exists A q xs.
+Proof.
+  induction xs; intros; split; intros; try trivial; inversion H0; subst. 
+  + constructor. apply H. trivial. 
+  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
+  + constructor. apply H. trivial. 
+  + inversion H0. constructor 1 . apply H. trivial.  constructor 2. apply (IHxs H), H3.
+Qed.
+
+Lemma is_datalog_rule_correct r: is_datalog_rule_dec r = true <-> is_datalog_rule r.
+Proof.
+ split; intros H. 
+  - destruct r, a. + simpl in H. inversion H.
+    + apply regular_datalog. 
+    eapply rewrite_forall_cond. intros.
+    eapply rewrite_exists_cond. intros.
+    apply iff_sym. apply atom_contains_dec.
+    eapply rewrite_forall_cond. intros.
+    apply iff_sym, is_there_some_true_map_Exists. 
+    rewrite <- is_it_all_true_map_Forall.
+    rewrite <- map_fusion.
+    apply H.
+  - induction H. simpl. 
+    rewrite map_fusion.
+    apply is_it_all_true_map_Forall.
+    eapply rewrite_forall_cond. intros.
+    apply is_there_some_true_map_Exists. 
+    simpl.
+    eapply rewrite_forall_cond. intros.
+    eapply rewrite_exists_cond. intros. 
+    apply atom_contains_dec.
+    apply H.
+Qed.
 
 (* Now for the grand theorem! *)
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
-    is_extensional kb -> is_datalog_rule r = true -> is_extensional (eval_rule kb r).
+    is_extensional kb -> is_datalog_rule r -> is_extensional (eval_rule kb r).
 Proof.
   intros kb.
   unfold eval_rule.
