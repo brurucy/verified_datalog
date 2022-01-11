@@ -59,14 +59,9 @@ Inductive well_formed : atom -> Prop :=
    This is the last part of datalog syntax.
  *)
 
-Definition example_rule_body := [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y"] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z"] ].
-Definition example_rule_head := atom_regular "ancestor" [ tm_var "X" ; tm_var "Z"].
-
 Inductive cl : Type :=
   | cl_rule : atom -> list atom -> cl
 .                        
-
-Definition example_rule := cl_rule example_rule_head example_rule_body.
 
 (* A Knowledge base is a list of atoms. It is extensional if all of its atoms are ground and well formed. *)
 Definition KnowledgeBase := list atom.
@@ -435,6 +430,11 @@ Compute eval_body example_kb_three [(atom_regular "ancestor" [ tm_var "X" ; tm_v
 Example previous_substitutions := eval_body example_kb_three [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y" ] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z" ]] [[]].
 
 Compute previous_substitutions.
+
+Example example_rule_body := [atom_regular "ancestor" [ tm_var "X" ; tm_var "Y"] ; atom_regular "ancestor" [ tm_var "Y" ; tm_var "Z"] ].
+Example example_rule_head := atom_regular "ancestor" [ tm_var "X" ; tm_var "Z"].
+
+Definition example_rule := cl_rule example_rule_head example_rule_body.
 
 Compute substitute_head example_rule_head previous_substitutions [].
 
@@ -833,18 +833,15 @@ Qed.
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
     is_extensional kb -> is_datalog_rule r -> is_extensional (eval_rule kb r).
 Proof.
-  intros kb.
-  unfold eval_rule.
-  destruct r.
-  destruct a.
-  - discriminate.
-  - simpl.
-    destruct is_it_all_true.
-    -- intros.
-       clear H0.
-       destruct (eval_body kb l) eqn: E.
-       constructor.
-       constructor.
-       admit.
-    -- discriminate.
-Admitted.
+  intros kb r Hkb Hr.
+  constructor.
+  generalize dependent r.
+  induction Hkb.
+  - intros r Hr.
+    inversion Hr.
+    simpl.
+    destruct eval_body.
+    -- constructor.
+    -- simpl.
+       
+Qed.
