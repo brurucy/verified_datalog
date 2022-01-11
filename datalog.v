@@ -180,7 +180,7 @@ Fixpoint substitution_step (kb : KnowledgeBase) (a1 : atom) (acc : list substitu
              | None => substitution_step l a1 acc
              end                           
   end.
-
+  
 (* Now that we have a function that generates substitutions, we can finally make use of them.
 
    The next function uses substitution_step to possibly generate more substitutions.
@@ -285,12 +285,17 @@ Fixpoint substitute_head (head : atom) (substitutions: list substitution) ( acc 
             end
   end.
 
+Compute substitute_head (atom_regular "Y" [tm_var "X";tm_const "Y"]) [[]] [].
+
 Definition eval_rule (kb : KnowledgeBase) (r : cl) : KnowledgeBase :=
   match r with
+  | cl_rule head [] => []
   | cl_rule head body =>
       let substitutions := eval_body kb body [[]] in
       (substitute_head head substitutions [])
   end.
+
+Compute eval_rule [] (cl_rule (atom_regular "Y" [tm_var "X";tm_const "Y"]) [atom_regular "Y" [tm_var "X";tm_const "Y"]]).
 
 (* A datalog rule MUST have all of the terms in its head show up in the body, otherwise eval_rule will not yield only ground atoms!! *)
 
@@ -829,19 +834,70 @@ Proof.
     apply H.
 Qed.
 
+Lemma sub_step_empty_kb a1 : substitution_step [] a1 [] = [].
+Proof.
+  simpl.
+  auto.
+Qed.
+
+Lemma eval_atom_empty_kb a1 ls : eval_atom [] a1 ls [] = [].
+Proof.
+  induction ls.
+  - auto.
+  - destruct (substitute_atom).
+    -- auto.
+    -- apply a.
+    -- simpl.
+       destruct (substitute_atom a1 a).
+       apply IHls.
+       apply IHls.
+    -- simpl.
+       destruct (substitute_atom a1 a).
+       apply IHls.
+       apply IHls.
+Qed.
+
+Lemma eval_body_empty_body kb s: eval_body kb [] s = s.
+Proof.
+  simpl.
+  auto.
+Qed.
+
+Lemma eval_body_empty_kb_and_s l : eval_body [] l [] = [].
+Proof.
+  induction l.
+  auto.
+  simpl.
+  apply IHl.
+Qed.
+
+Lemma eval_rule_empty_kb r : eval_rule [] r = [].
+Proof.
+  destruct r.
+  generalize dependent a.
+  destruct l.
+  - auto.
+  - unfold eval_rule.
+    simpl.
+    destruct (substitute_atom a []).
+    rewrite eval_body_empty_kb_and_s.
+    auto.
+    rewrite eval_body_empty_kb_and_s.
+    auto.
+Qed.
+
 (* Now for the grand theorem! *)
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
     is_extensional kb -> is_datalog_rule r -> is_extensional (eval_rule kb r).
 Proof.
-  intros kb r Hkb Hr.
-  constructor.
-  generalize dependent r.
-  induction Hkb.
-  - intros r Hr.
-    inversion Hr.
-    simpl.
-    destruct eval_body.
-    -- constructor.
-    -- simpl.
-       
+  induction 1.
+  - intros H.
+    rewrite eval_rule_empty_kb.
+    constructor.
+  - intros Hr.
+    destruct l.
+    -- rewrite eval_rule_empty_kb.
+       constructor.
+    -- 
 Qed.
+
