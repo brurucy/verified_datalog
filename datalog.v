@@ -137,7 +137,7 @@ Fixpoint substitute_term (l1 acc : list tm) (s : substitution) : list tm :=
                      
 Fixpoint is_ground (l : list tm) : bool :=
   match l with
-  | nil => true
+  | nil => false
   | (tm_const _) :: l => is_ground l
   | _ => false
   end.        
@@ -886,18 +886,105 @@ Proof.
     auto.
 Qed.
 
+
+(*
+  a0, a1 : atom
+  l0 : list atom
+  a : atom
+  l : list atom
+  H : Forall (fun a : atom => is_ground' a /\ well_formed a) (a :: l)
+  Hr : is_datalog_rule (cl_rule a0 (a1 :: l0))
+  ============================
+  is_extensional (substitute_head a0 (eval_body (a :: l) (a1 :: l0) [[]]) [])
+
+*)
+
+(*
+ If all terms in the head show up in the body
+ Then there COULD be substitutions generated
+ which, if 
+ *)
+
+Example keeb0 := [ atom_ground "X" [tm_const "yee";tm_const "haa"]; atom_ground  "Y" [tm_const "yee";tm_const "haa"] ].
+Example keeb1 := [ atom_ground "X" [tm_const "yee";tm_const "haa"]; atom_ground  "Y" [tm_const "yee";tm_const "haa"] ].
+Compute eval_rule keeb0 example_rule.
+Compute eval_body [ example_ground_atom_two; example_ground_atom_four ] example_rule_body [[]].
+(* Lemma eval_body *)
+
+Definition is_var t := match t with tm_var _ => True | _ => False end.
+
+Lemma forall_is_var : forall l, Forall is_var l -> is_ground l = false.
+Proof.
+  intros.
+  induction l.
+  -  simpl.
+     auto.
+  -  simpl.
+     rewrite IHl.
+     destruct a eqn:Ea.
+     -- auto.
+     -- auto.
+     -- inversion H.
+        subst.
+        apply H3.
+Qed.
+
+Search Forall.
+
+Lemma forall_is_const : forall l, l <> [] -> Forall is_const l -> is_ground l = true.
+Proof.
+  intros. 
+  induction H0.
+  - intuition.
+  - eapply Forall_cons in H1.
+    inversion H1.
+    subst.
+    
+    subst.
+    simpl.
+    rewrite H5.
+    simpl.
+Admitted.
+
+Lemma submarine l1 l2 s sym (a : atom):
+  Forall is_var                         l1 ->
+  l2 <> []                                  ->
+  Forall is_const                       l2 ->
+  Forall (fun term => In term (map fst s)) l1 ->
+  Forall (fun term => In term (map snd s)) l2 ->
+  Some a = substitute_atom (atom_regular sym l1) s ->
+  is_ground' a /\ well_formed a.
+Proof.
+  induction s.
+  - intros.
+    simpl in *.
+    injection H4 as H4; subst; try solve [repeat constructor].
+    -- constructor.
+Admitted.
+
 (* Now for the grand theorem! *)
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
     is_extensional kb -> is_datalog_rule r -> is_extensional (eval_rule kb r).
 Proof.
-  induction 1.
+  destruct 1.
   - intros H.
     rewrite eval_rule_empty_kb.
     constructor.
-  - intros Hr.
+  - intro Hr.
     destruct l.
     -- rewrite eval_rule_empty_kb.
        constructor.
-    -- 
+    -- destruct r.
+       simpl.
+       destruct l0.
+       --- constructor.
+       --- destruct (substitute_head a0) eqn:E.
+           ---- constructor.
+           ---- constructor.
+                constructor.
+                inversion H.
+                inversion Hr.
+                subst.
+                simpl in E.
 Qed.
 
