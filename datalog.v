@@ -133,11 +133,16 @@ Fixpoint substitute_term (l1 acc : list tm) (s : substitution) : list tm :=
                                 | None => h
                                 end in
               substitute_term l (acc ++ [value_lookup]) s
-  end.                          
-                     
+  end.
+
+Lemma subs_t_empty acc s : substitute_term [] acc s = acc.
+Proof.
+  easy.
+Qed.
+
 Fixpoint is_ground (l : list tm) : bool :=
-  match l with
-  | nil => false
+  match l with   
+  | [tm_const _] => true
   | (tm_const _) :: l => is_ground l
   | _ => false
   end.        
@@ -723,7 +728,71 @@ Proof.
            auto.
            auto.
 Qed.
-  
+
+Lemma gval_in_forward : forall s t1,
+    In t1 (map fst s) ->
+    (exists t2, Some t2 = getValue s t1).
+Proof.
+  intros.
+  generalize dependent t1.
+  induction s.
+  - contradiction.    
+  - intros.
+    destruct H.
+    -- destruct a.
+       assert (t = t1).
+       easy.
+       simpl.
+       rewrite <- eqb_term_eq in H0.
+       rewrite H0.
+       exists t0.
+       easy.
+    -- destruct a eqn:Ea.
+       unfold getValue.
+       destruct (eqb_term t t1).
+       --- exists t0. easy.
+       --- fold getValue.
+           apply IHs.
+           easy.
+Qed.
+
+Lemma gval_in_backward : forall s t1,
+    (exists t2, Some t2 = getValue s t1) ->
+    In t1 (map fst s).
+Proof.
+  intros.
+  generalize dependent t1.
+  induction s.
+  - intros.
+    simpl.
+    destruct H.
+    discriminate.
+  - simpl.    
+    destruct a eqn:eA.
+    subst.
+    intros t1.
+    simpl.
+    intros H.
+    destruct H.    
+    destruct (eqb_term t t1) eqn:eE.
+    -- left.
+       apply eqb_term_eq in eE.
+       easy.
+    -- right.
+       apply IHs.
+       exists x.
+       easy.
+Qed.
+
+Theorem gval_in : forall s t1,
+    In t1 (map fst s) <->
+    (exists t2, Some t2 = getValue s t1).
+Proof.
+  constructor 1.
+  - apply gval_in_forward.
+  - apply gval_in_backward.    
+Qed.
+
 Lemma is_in_term_list_In l term:
   is_term_in_term_list l term = true <-> In term l.
 Proof.
@@ -886,81 +955,106 @@ Proof.
     auto.
 Qed.
 
-
-(*
-  a0, a1 : atom
-  l0 : list atom
-  a : atom
-  l : list atom
-  H : Forall (fun a : atom => is_ground' a /\ well_formed a) (a :: l)
-  Hr : is_datalog_rule (cl_rule a0 (a1 :: l0))
-  ============================
-  is_extensional (substitute_head a0 (eval_body (a :: l) (a1 :: l0) [[]]) [])
-
-*)
-
-(*
- If all terms in the head show up in the body
- Then there COULD be substitutions generated
- which, if 
- *)
-
 Example keeb0 := [ atom_ground "X" [tm_const "yee";tm_const "haa"]; atom_ground  "Y" [tm_const "yee";tm_const "haa"] ].
 Example keeb1 := [ atom_ground "X" [tm_const "yee";tm_const "haa"]; atom_ground  "Y" [tm_const "yee";tm_const "haa"] ].
 Compute eval_rule keeb0 example_rule.
 Compute eval_body [ example_ground_atom_two; example_ground_atom_four ] example_rule_body [[]].
-(* Lemma eval_body *)
 
 Definition is_var t := match t with tm_var _ => True | _ => False end.
 
-Lemma forall_is_var : forall l, Forall is_var l -> is_ground l = false.
+Lemma annoying_lemma : forall l s, is_ground (tm_const s :: l) = false -> is_ground l = false.
+Proof.
+  induction l.
+  - intros.
+    easy.
+  - unfold is_ground.
+    destruct a eqn:eA.
+    auto.
+    auto.
+Qed.
+
+
+Lemma exists_is_var : forall l, (Exists is_var l \/ l = []) <-> is_ground l = false.
 Proof.
   intros.
   induction l.
-  -  simpl.
-     auto.
-  -  simpl.
-     rewrite IHl.
-     destruct a eqn:Ea.
-     -- auto.
-     -- auto.
-     -- inversion H.
-        subst.
-        apply H3.
+  - constructor 1.
+    -- easy.
+    -- intros H.
+       right.
+       auto.
+  - constructor 1.
+    -- intros H.
+       destruct H.
+       --- simpl.
+           destruct l.
+           ---- destruct a eqn:eA.
+                inversion H.
+                subst.
+                easy.
+                subst.
+                easy.
+                easy.
+           ---- destruct a eqn:eA.
+                apply IHl.
+                inversion H.
+                subst.
+                easy.
+                left.
+                apply H1.
+                easy.
+       --- rewrite H.
+           easy.
+    -- intros H.
+       left.
+       destruct a.
+       --- simpl in *.
+           destruct l. congruence.
+           ---- intuition.
+                easy.
+       --- constructor.
+           easy.           
 Qed.
 
-Search Forall.
 
-Lemma forall_is_const : forall l, l <> [] -> Forall is_const l -> is_ground l = true.
+Lemma forall_is_const : forall l, (Forall is_const l /\ l <> []) <-> is_ground l = true.
 Proof.
-  intros. 
-  induction H0.
-  - intuition.
-  - eapply Forall_cons in H1.
-    inversion H1.
-    subst.
-    
-    subst.
-    simpl.
-    rewrite H5.
-    simpl.
+  intros.
+  induction l.
+  simpl in *.
+  - constructor.
+    easy.
+    easy.
+  - constructor; intros H.
+    -- destruct H; intuition eauto; try solve [easy]; subst.
+       destruct a; intuition eauto; try solve [easy]; subst.
+       destruct l; intuition eauto; try solve [easy]; subst.
+       --- destruct H3.
+           inversion H.
+           subst.
+           apply H5.
+           inversion H.
+           subst.
+           easy.
+           easy.           
+       --- simpl.
+           inversion H.
+           easy.
+    -- destruct a; intuition eauto; try solve [easy]; subst.
+       destruct l; intuition eauto; try solve [easy]; subst.
+       --- constructor; try solve [easy].
+       --- constructor; try solve [easy].
+Qed.
+
+Lemma submarine : forall (a : atom),
+  is_ground' a /\ well_formed a <->
+  (exists l1 l2 s sym, ( l1 <> [] /\ l2 <> []) /\
+  ( Forall (fun term => In term (map fst s) /\ is_var term ) l1 ) /\
+  ( Forall (fun term => In term (map snd s) /\ is_const term ) l2 ) /\
+  ( Some a = substitute_atom (atom_regular sym l1) s )).
+Proof.
 Admitted.
 
-Lemma submarine l1 l2 s sym (a : atom):
-  Forall is_var                         l1 ->
-  l2 <> []                                  ->
-  Forall is_const                       l2 ->
-  Forall (fun term => In term (map fst s)) l1 ->
-  Forall (fun term => In term (map snd s)) l2 ->
-  Some a = substitute_atom (atom_regular sym l1) s ->
-  is_ground' a /\ well_formed a.
-Proof.
-  induction s.
-  - intros.
-    simpl in *.
-    injection H4 as H4; subst; try solve [repeat constructor].
-    -- constructor.
-Admitted.
 
 (* Now for the grand theorem! *)
 Theorem final_theorem : forall (kb : KnowledgeBase) (r : cl),
@@ -981,10 +1075,15 @@ Proof.
        --- destruct (substitute_head a0) eqn:E.
            ---- constructor.
            ---- constructor.
-                constructor.
+                constructor.                
                 inversion H.
                 inversion Hr.
                 subst.
                 simpl in E.
-Qed.
+                apply submarine.
+                inversion Hr.
+                subst.
+                intuition; eauto.
+                simpl.
+Admitted.
 
